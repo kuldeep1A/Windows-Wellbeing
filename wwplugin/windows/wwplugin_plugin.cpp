@@ -1,78 +1,32 @@
 #include "wwplugin_plugin.h"
-#include <VersionHelpers.h>
 #include <windows.h>
-#include <Psapi.h>
-#include <iostream>
-#include <unordered_map>
+#include <vector>
 
 namespace wwplugin
 {
-  std::unordered_map<std::string, FILETIME> processStartTimes;
-  std::string ConvertTCHARToString(const TCHAR *tcharString)
+  struct AppInfo
   {
-#ifdef UNICODE
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, tcharString, -1, nullptr, 0, nullptr, nullptr);
-    std::string convertedName(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, tcharString, -1, &convertedName[0], size_needed, nullptr, nullptr);
-#else
-    std::string convertedName(tcharString);
-#endif
-    return convertedName;
-  }
-
-  void SampleProcesses()
+    std::string displayName;
+  };
+  std::vector<AppInfo> GetInstalledApplications()
   {
-    DWORD processesArray[1024];
-    DWORD bytesReturned;
-
-    if (EnumProcesses(processesArray, sizeof(processesArray), &bytesReturned))
+    std::vector<AppInfo> installedApps;
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
     {
-      size_t count = bytesReturned / sizeof(DWORD);
+      char appName[1024];
+      DWORD appNameLen, index = 0;
 
-      for (size_t i = 0; i < count; ++i)
+      while ((appNameLen = sizeof(appName), RegEnumKeyExA(hKey, index++, appName, &appNameLen, nullptr, nullptr, nullptr, nullptr)) != ERROR_NO_MORE_ITEMS)
       {
-        DWORD pid = processesArray[i];
-        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+        AppInfo appInfo;
+        appInfo.displayName = std::string(appName);
 
-        if (hProcess != nullptr)
-        {
-          TCHAR processName[MAX_PATH];
-          if (GetModuleBaseName(hProcess, nullptr, processName, sizeof(processName) / sizeof(TCHAR)))
-          {
-            std::string appName = ConvertTCHARToString(processName);
-
-            auto it = processStartTimes.find(appName);
-
-            if (it == processStartTimes.end())
-            {
-              FILETIME startTime;
-              GetProcessTimes(hProcess, &startTime, nullptr, nullptr, nullptr);
-
-              processStartTimes[appName] = startTime;
-            }
-            else
-            {
-              FILETIME now, creationTime, exitTime, kernelTime, userTime;
-              GetSystemTimeAsFileTime(&now);
-              GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime);
-
-              ULARGE_INTEGER start, current;
-              start.LowPart = it->second.dwLowDateTime;
-              start.HighPart = it->second.dwHighDateTime;
-              current.LowPart = now.dwLowDateTime;
-              current.HighPart = now.dwHighDateTime;
-
-              ULONGLONG duration = current.QuadPart - start.QuadPart;
-
-              duration /= 10000000;
-
-              std::cout << "Application: " << appName << ", Usage Time: " << duration << " seconds\n";
-            }
-          }
-          CloseHandle(hProcess);
-        }
+        installedApps.push_back(appInfo);
       }
+      RegCloseKey(hKey);  
     }
+    return installedApps;
   }
 
   // static
@@ -104,8 +58,20 @@ namespace wwplugin
   {
     if (method_call.method_name().compare("getInstalledApps") == 0)
     {
-      SampleProcesses();
-      result->Success(flutter::EncodableValue("Sampled processes."));
+      auto apps = GetInstalledApplications();
+      std::vector<flutter::EncodableValue> encodableApps;
+
+      for (const auto &app : apps)
+      {
+        // Create a map to represent each application with its information
+        std::map<std::string, flutter::EncodableValue> appInfoMap;
+        appInfoMap["displayName"] = flutter::EncodableValue(app.displayName);
+        // Add more fields to the map if additional information is available
+
+        encodableApps.push_back(flutter::EncodableValue(appInfoMap));
+      }
+
+      result->Success(flutter::EncodableValue(encodableApps));
     }
     else
     {
@@ -113,4 +79,4 @@ namespace wwplugin
     }
   }
 
-}
+} // namespace wwplugin
