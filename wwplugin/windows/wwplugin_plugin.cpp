@@ -1,36 +1,43 @@
 #include "wwplugin_plugin.h"
+
+// This must be included before many other Windows headers.
 #include <windows.h>
-#include <vector>
+
+// For getPlatformVersion; remove unless needed for your plugin implementation.
+#include <VersionHelpers.h>
+
+#include <flutter/method_channel.h>
+#include <flutter/plugin_registrar_windows.h>
+#include <flutter/standard_method_codec.h>
+
+#include <memory>
+#include <sstream>
 
 namespace wwplugin
 {
-  struct AppInfo
+
+  std::vector<std::string> GetInstalledApplications()
   {
-    std::string displayName;
-  };
-  std::vector<AppInfo> GetInstalledApplications()
-  {
-    std::vector<AppInfo> installedApps;
+    std::vector<std::string> installedApps;
     HKEY hKey;
+    // Open the key where installed applications are listed under Windows
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
     {
       char appName[1024];
       DWORD appNameLen, index = 0;
 
+      // Enumerate all applications listed under the uninstall key
       while ((appNameLen = sizeof(appName), RegEnumKeyExA(hKey, index++, appName, &appNameLen, nullptr, nullptr, nullptr, nullptr)) != ERROR_NO_MORE_ITEMS)
       {
-        AppInfo appInfo;
-        appInfo.displayName = std::string(appName);
-
-        installedApps.push_back(appInfo);
+        installedApps.push_back(std::string(appName));
       }
-      RegCloseKey(hKey);  
+      RegCloseKey(hKey);
     }
     return installedApps;
   }
-
   // static
-  void WwpluginPlugin::RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar)
+  void WwpluginPlugin::RegisterWithRegistrar(
+      flutter::PluginRegistrarWindows *registrar)
   {
     auto channel =
         std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -63,12 +70,7 @@ namespace wwplugin
 
       for (const auto &app : apps)
       {
-        // Create a map to represent each application with its information
-        std::map<std::string, flutter::EncodableValue> appInfoMap;
-        appInfoMap["displayName"] = flutter::EncodableValue(app.displayName);
-        // Add more fields to the map if additional information is available
-
-        encodableApps.push_back(flutter::EncodableValue(appInfoMap));
+        encodableApps.push_back(flutter::EncodableValue(app));
       }
 
       result->Success(flutter::EncodableValue(encodableApps));
@@ -78,5 +80,4 @@ namespace wwplugin
       result->NotImplemented();
     }
   }
-
 } // namespace wwplugin
