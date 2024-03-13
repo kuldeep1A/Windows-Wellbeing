@@ -32,10 +32,10 @@ class MyHomePage extends StatefulWidget {
 class _MyAppState extends State<MyHomePage> {
   static const platform = MethodChannel('wwplugin');
 
-  Future<void> getInstalledApps() async {
+  Future<void> getLast24HoursUsageAppsDetails() async {
     try {
       final List<dynamic> apps =
-          await platform.invokeMethod('getInstalledApps');
+          await platform.invokeMethod('GetLast24HoursUsageAppsDetails');
       print("res: $apps");
     } on PlatformException catch (e) {
       print("Failed to get installed apps: '${e.message}'.");
@@ -51,7 +51,7 @@ class _MyAppState extends State<MyHomePage> {
         ),
         body: Center(
           child: ElevatedButton(
-            onPressed: getInstalledApps,
+            onPressed: getLast24HoursUsageAppsDetails,
             child: const Text('Get Installed Apps'),
           ),
         ),
