@@ -1,0 +1,9 @@
+Local/*
+Local
+/build
+build/*
+build
+.idea
+.idea/*
+.dart_tool
+.dart_tool/*
