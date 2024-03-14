@@ -34,36 +34,27 @@ namespace wwplugin
       DWORD appNameLen, index = 0;
       while ((appNameLen = sizeof(appName), RegEnumKeyExW(hKey, index++, appName, &appNameLen, nullptr, nullptr, nullptr, nullptr)) != ERROR_NO_MORE_ITEMS)
       {
-        installedApps.push_back(std::wstring(appName));
+        installedApps.push_back(appName);
       }
       RegCloseKey(hKey);
     }
     return installedApps;
   }
 
-  std::wstring ConvertTCharToWideString(const TCHAR *tcharString)
-  {
-#ifdef UNICODE
-    return std::wstring(tcharString);
-#else
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    return converter.from_bytes(tcharString);
-#endif
-  }
-
   std::vector<AppUsageDetails> GetLast24HoursUsageAppsDetails()
   {
     std::vector<AppUsageDetails> usageAppsDetails;
-    SYSTEMTIME currentTime;
-    GetSystemTime(&currentTime);
     FILETIME fileTime;
-    SystemTimeToFileTime(&currentTime, &fileTime);
+    GetSystemTimeAsFileTime(&fileTime); // Get current system time
+
+    // Subtract 24 hours from the current time
     ULARGE_INTEGER uli;
     uli.LowPart = fileTime.dwLowDateTime;
     uli.HighPart = fileTime.dwHighDateTime;
     uli.QuadPart -= 24LL * 60LL * 60LL * 10000000LL;
     fileTime.dwLowDateTime = uli.LowPart;
     fileTime.dwHighDateTime = uli.HighPart;
+
     DWORD processes[1024];
     DWORD needed;
     if (EnumProcesses(processes, sizeof(processes), &needed))
@@ -78,16 +69,17 @@ namespace wwplugin
           FILETIME creationTime, exitTime, kernelTime, userTime;
           if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime))
           {
+            // Check if the process was created in the last 24 hours
             if (CompareFileTime(&creationTime, &fileTime) > 0)
             {
               AppUsageDetails details;
-              TCHAR szProcessName[MAX_PATH] = TEXT("<unknown>");
+              WCHAR szProcessName[MAX_PATH] = L"<unknown>"; // Use WCHAR for wide characters
               HMODULE hMod;
               DWORD cbNeeded;
               if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
               {
-                GetModuleBaseName(hProcess, hMod, szProcessName, sizeof(szProcessName) / sizeof(TCHAR));
-                details.appName = ConvertTCharToWideString(szProcessName);
+                GetModuleBaseNameW(hProcess, hMod, szProcessName, sizeof(szProcessName) / sizeof(WCHAR));
+                details.appName = szProcessName; // Directly assign the WCHAR string
                 details.pid = pid;
                 ULONGLONG totalTime = (uli.QuadPart - ((ULONGLONG)exitTime.dwHighDateTime << 32 | exitTime.dwLowDateTime)) / 10000000LL;
                 details.totalTime = totalTime;
@@ -107,7 +99,7 @@ namespace wwplugin
   void WwpluginPlugin::RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar)
   {
     auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-        registrar->messenger(), L"wwplugin",
+        registrar->messenger(), "wwplugin",
         &flutter::StandardMethodCodec::GetInstance());
 
     auto plugin = std::make_unique<WwpluginPlugin>();
@@ -125,25 +117,33 @@ namespace wwplugin
 
   WwpluginPlugin::~WwpluginPlugin() {}
 
+  std::string WideStringToNarrowString(const std::wstring &wstr)
+  {
+    if (wstr.empty())
+      return std::string();
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), nullptr, 0, nullptr, nullptr);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, nullptr, nullptr);
+    return strTo;
+  }
+
   void WwpluginPlugin::HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue> &method_call,
                                         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
   {
+    // The original line with the error:
+    // const std::wstring &methodName = method_call.method_name(); // This is incorrect if method_name() returns std::string or std::u8string
+
+    // Corrected approach: Convert std::string (or std::u8string) to std::wstring
+    std::string narrowMethodName = method_call.method_name(); // Assuming method_name() returns std::string
+    std::wstring methodName(narrowMethodName.begin(), narrowMethodName.end());
+
+    // If method_name() returns std::u8string (in newer versions), you might need to adjust the conversion process accordingly
+
     const wchar_t *targetMethodName = L"getLast24HoursUsageAppsDetails";
 
-    const std::wstring &methodName = method_call.method_name();
-    size_t methodNameLength = methodName.length();
+    bool isTargetMethod = (methodName == targetMethodName); // Simplified comparison
 
-    bool isTargetMethod = true;
-    for (size_t i = 0; i < methodNameLength; ++i)
-    {
-      if (methodName[i] != targetMethodName[i])
-      {
-        isTargetMethod = false;
-        break;
-      }
-    }
-
-    if (isTargetMethod && methodNameLength == wcslen(targetMethodName))
+    if (isTargetMethod)
     {
       auto details = GetLast24HoursUsageAppsDetails();
       std::vector<flutter::EncodableValue> encodableDetails;
@@ -151,12 +151,15 @@ namespace wwplugin
       for (const auto &detail : details)
       {
         flutter::EncodableMap appDetails;
-        appDetails[flutter::EncodableValue(L"appName")] = flutter::EncodableValue(detail.appName);
+        appDetails[flutter::EncodableValue("appName")] = flutter::EncodableValue(WideStringToNarrowString(detail.appName));
         appDetails[flutter::EncodableValue(L"pid")] = flutter::EncodableValue(static_cast<int>(detail.pid));
         appDetails[flutter::EncodableValue(L"totalTime")] = flutter::EncodableValue(static_cast<int64_t>(detail.totalTime));
         appDetails[flutter::EncodableValue(L"creationTime")] = flutter::EncodableValue(detail.creationTime.dwLowDateTime | (static_cast<int64_t>(detail.creationTime.dwHighDateTime) << 32));
         appDetails[flutter::EncodableValue(L"exitTime")] = flutter::EncodableValue(detail.exitTime.dwLowDateTime | (static_cast<int64_t>(detail.exitTime.dwHighDateTime) << 32));
 
+        // Debug print liner
+        std::wstring debugMessage = L"App Name: " + detail.appName + L", PID: " + std::to_wstring(detail.pid) + L"\n";
+        OutputDebugString(debugMessage.c_str());
         encodableDetails.push_back(flutter::EncodableValue(appDetails));
       }
 
