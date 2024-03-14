@@ -24,22 +24,6 @@ namespace wwplugin
     FILETIME exitTime;
   };
 
-  std::vector<std::wstring> GetInstalledApplications()
-  {
-    std::vector<std::wstring> installedApps;
-    HKEY hKey;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
-    {
-      wchar_t appName[1024];
-      DWORD appNameLen, index = 0;
-      while ((appNameLen = sizeof(appName), RegEnumKeyExW(hKey, index++, appName, &appNameLen, nullptr, nullptr, nullptr, nullptr)) != ERROR_NO_MORE_ITEMS)
-      {
-        installedApps.push_back(appName);
-      }
-      RegCloseKey(hKey);
-    }
-    return installedApps;
-  }
 
   std::vector<AppUsageDetails> GetLast24HoursUsageAppsDetails()
   {
