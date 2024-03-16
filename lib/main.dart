@@ -30,38 +30,25 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyHomePage> {
-  static const platform = MethodChannel('wwplugin');
+  static const MethodChannel _channel = MethodChannel('wwplugin');
+  List<String> _applications = [];
 
-  Future<void> getLast24HoursUsageAppsDetails() async {
+  Future<void> getActiveApplicationList() async {
     try {
-      final List<dynamic> apps =
-          await platform.invokeMethod('getLast24HoursUsageAppsDetails');
-      for (var app in apps) {
-        // Assuming appName, pid, totalTime, creationTime, exitTime are keys in the map
-        final String appName = app["appName"] ?? "Unknown";
-        final int pid = app["pid"] ?? -1;
-        final int totalTime = app["totalTime"] ?? -1;
-        final int creationTimeRaw = app["creationTime"] ?? -1;
-        final int exitTimeRaw = app["exitTime"] ?? -1;
+      // Invoke the method to get the application list
+      final List<dynamic>? applications =
+          await _channel.invokeListMethod('getActiveApplicationList');
 
-        // Convert raw file time to DateTime (if applicable)
-        // Note: Conversion depends on how you're representing time. The following is a basic example.
-        final DateTime creationTime = DateTime.fromMillisecondsSinceEpoch(
-            creationTimeRaw ~/ 10,
-            isUtc: true);
-        final DateTime exitTime =
-            DateTime.fromMillisecondsSinceEpoch(exitTimeRaw ~/ 10, isUtc: true);
-
-        print('App Name: $appName');
-        print('PID: $pid');
-        print(
-            'Total Time: $totalTime seconds'); // Assuming totalTime is in seconds
-        print('Creation Time: $creationTime');
-        print('Exit Time: $exitTime');
-        print('-------------------------'); // Separator for readability
+      // Update the _applications list and refresh the UI
+      setState(() {
+        _applications = applications?.map((e) => e.toString()).toList() ?? [];
+      });
+      for (String app in _applications) {
+        print(app);
       }
+      print("-------- total ${_applications.length} ------------\n");
     } on PlatformException catch (e) {
-      print("Failed to get app usage details: '${e.message}'.");
+      print("Failed to get active application list: '${e.message}'.");
     }
   }
 
@@ -70,12 +57,29 @@ class _MyAppState extends State<MyHomePage> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Windows Apps List Example'),
+          title: const Text('Windows Plugin Using Now'),
         ),
         body: Center(
-          child: ElevatedButton(
-            onPressed: getLast24HoursUsageAppsDetails,
-            child: const Text('Get Installed Apps'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: getActiveApplicationList,
+                child: const Text('Refresh active application list'),
+              ),
+              Expanded(
+                // Use ListView.builder to create a scrollable list
+                child: ListView.builder(
+                  itemCount: _applications.length,
+                  itemBuilder: (context, index) {
+                    // Display each application in a ListTile
+                    return ListTile(
+                      title: Text(_applications[index]),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
