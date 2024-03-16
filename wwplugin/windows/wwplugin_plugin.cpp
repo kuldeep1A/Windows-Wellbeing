@@ -15,10 +15,14 @@
 
 #include <vector>
 #include <psapi.h>
+#include <string>
+
+// Add the pragma comment directive to include version.lib
+#pragma comment(lib, "version.lib")
 
 namespace wwplugin
 {
-  // Helper function to check if a window is a valid application window
+
   BOOL IsAppWindow(HWND hwnd)
   {
     return IsWindowVisible(hwnd) && GetWindowTextLengthW(hwnd) > 0;
@@ -43,7 +47,6 @@ namespace wwplugin
     if (pFileInfo->dwSignature != 0xFEEF04BD)
       return L"";
 
-    // Assuming the application description is stored in the "FileDescription" field
     wchar_t *pDescription = nullptr;
     UINT descLen = 0;
     if (VerQueryValue(data.data(), L"\\StringFileInfo\\040904b0\\FileDescription", reinterpret_cast<void **>(&pDescription), &descLen))
@@ -54,7 +57,6 @@ namespace wwplugin
     return L"";
   }
 
-  // Callback function for EnumWindows
   BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
   {
     if (IsAppWindow(hwnd))
@@ -64,17 +66,15 @@ namespace wwplugin
       DWORD processId;
       GetWindowThreadProcessId(hwnd, &processId);
 
-      HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+      // Open the process with elevated privileges
+      HANDLE processHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
       if (processHandle != NULL)
       {
         WCHAR processName[MAX_PATH];
         DWORD size = MAX_PATH;
         if (QueryFullProcessImageName(processHandle, 0, processName, &size) != 0)
         {
-          // Retrieve the application description
           std::wstring appDescription = GetApplicationDescription(processName);
-
-          // Add the application description to the vector
           if (!appDescription.empty())
           {
             windowTitles->push_back(appDescription);
@@ -86,14 +86,11 @@ namespace wwplugin
     return TRUE; // Continue enumeration
   }
 
-  // static
-  void WwpluginPlugin::RegisterWithRegistrar(
-      flutter::PluginRegistrarWindows *registrar)
+  void WwpluginPlugin::RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar)
   {
-    auto channel =
-        std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-            registrar->messenger(), "wwplugin",
-            &flutter::StandardMethodCodec::GetInstance());
+    auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+        registrar->messenger(), "wwplugin",
+        &flutter::StandardMethodCodec::GetInstance());
 
     auto plugin = std::make_unique<WwpluginPlugin>();
 
@@ -110,10 +107,8 @@ namespace wwplugin
 
   WwpluginPlugin::~WwpluginPlugin() {}
 
-  // Main method to get active application list
-  void WwpluginPlugin::HandleMethodCall(
-      const flutter::MethodCall<flutter::EncodableValue> &method_call,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
+  void WwpluginPlugin::HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                                        std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
   {
     if (method_call.method_name().compare("getActiveApplicationList") == 0)
     {
@@ -134,7 +129,6 @@ namespace wwplugin
     }
   }
 
-  // Utility function to convert std::wstring to UTF-8 encoded std::string
   std::string WwpluginPlugin::WideStringToUTF8(const std::wstring &wstr)
   {
     if (wstr.empty())
