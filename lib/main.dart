@@ -30,15 +30,25 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyHomePage> {
-  static const platform = MethodChannel('wwplugin');
+  static const MethodChannel _channel = MethodChannel('wwplugin');
+  List<String> _applications = [];
 
-  Future<void> getInstalledApps() async {
+  Future<void> getActiveApplicationList() async {
     try {
-      final List<dynamic> apps =
-          await platform.invokeMethod('getInstalledApps');
-      print("res: $apps");
+      // Invoke the method to get the application list
+      final List<dynamic>? applications =
+          await _channel.invokeListMethod('getActiveApplicationList');
+
+      // Update the _applications list and refresh the UI
+      setState(() {
+        _applications = applications?.map((e) => e.toString()).toList() ?? [];
+      });
+      for (String app in _applications) {
+        print(app);
+      }
+      print("-------- total ${_applications.length} ------------\n");
     } on PlatformException catch (e) {
-      print("Failed to get installed apps: '${e.message}'.");
+      print("Failed to get active application list: '${e.message}'.");
     }
   }
 
@@ -47,12 +57,29 @@ class _MyAppState extends State<MyHomePage> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Windows Apps List Example'),
+          title: const Text('Windows Plugin Using Now'),
         ),
         body: Center(
-          child: ElevatedButton(
-            onPressed: getInstalledApps,
-            child: const Text('Get Installed Apps'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: getActiveApplicationList,
+                child: const Text('Refresh active application list'),
+              ),
+              Expanded(
+                // Use ListView.builder to create a scrollable list
+                child: ListView.builder(
+                  itemCount: _applications.length,
+                  itemBuilder: (context, index) {
+                    // Display each application in a ListTile
+                    return ListTile(
+                      title: Text(_applications[index]),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
