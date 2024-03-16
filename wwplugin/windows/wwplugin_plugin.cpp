@@ -77,6 +77,7 @@ namespace wwplugin
           std::wstring appDescription = GetApplicationDescription(processName);
           if (!appDescription.empty())
           {
+            appDescription.erase(appDescription.size() - 1);
             windowTitles->push_back(appDescription);
           }
         }

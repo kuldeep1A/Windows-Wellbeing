@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/core.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,26 +31,21 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyHomePage> {
-  static const MethodChannel _channel = MethodChannel('wwplugin');
+  Core core = Core();
   List<String> _applications = [];
 
-  Future<void> getActiveApplicationList() async {
-    try {
-      // Invoke the method to get the application list
-      final List<dynamic>? applications =
-          await _channel.invokeListMethod('getActiveApplicationList');
+  Future<void> getCore() async {
+    final List<String> applications = await core.getActiveApplicationList();
 
-      // Update the _applications list and refresh the UI
-      setState(() {
-        _applications = applications?.map((e) => e.toString()).toList() ?? [];
-      });
-      for (String app in _applications) {
-        print(app);
-      }
-      print("-------- total ${_applications.length} ------------\n");
-    } on PlatformException catch (e) {
-      print("Failed to get active application list: '${e.message}'.");
+    setState(() {
+      _applications = applications;
+    });
+
+    for (String app in _applications) {
+      print("${app.length} app $app ");
     }
+
+    print("---\n\n");
   }
 
   @override
@@ -64,8 +60,9 @@ class _MyAppState extends State<MyHomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: getActiveApplicationList,
-                child: const Text('Refresh active application list'),
+                onPressed: getCore,
+                child: Text(
+                    'Refresh active application list ${_applications.length}'),
               ),
               Expanded(
                 // Use ListView.builder to create a scrollable list
